@@ -45,7 +45,7 @@ class ArxivClient:
         """
         # Remove version suffix if present (e.g., v1, v2)
         base_id = arxiv_id.split('v')[0]
-        return f"https://arxiv.org/html/{arxiv_id}"
+        return f"https://arxiv.org/html/{base_id}"
 
     def _parse_entry(self, entry: Dict[str, Any]) -> Dict[str, Any]:
         """Parse a feed entry into a paper dictionary."""

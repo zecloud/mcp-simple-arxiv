@@ -120,7 +120,8 @@ Examples:
         result += "- Abstract page: " + paper["abstract_url"] + "\n"
         if paper["html_url"]:  # Add HTML version if available
             result += "- Full text HTML version: " + paper["html_url"] + "\n"
-        result += "- PDF version: " + paper["pdf_url"] + "\n"
+        if paper["pdf_url"]:
+            result += "- PDF version: " + paper["pdf_url"] + "\n"
         
         # Additional information section
         if paper["comment"]:
