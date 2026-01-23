@@ -17,7 +17,20 @@ from .update_taxonomy import load_taxonomy, update_taxonomy_file
 logger = logging.getLogger(__name__)
 
 def get_first_sentence(text: str, max_len: int = 200) -> str:
-    """Extract first sentence from text, limiting length."""
+    """
+    Extract the first sentence from text, limiting length.
+
+    Looks for common sentence endings (period, exclamation, question mark).
+    If no sentence ending is found within max_len characters, truncates
+    the text and appends ellipsis.
+
+    Args:
+        text: The input text to extract from.
+        max_len: Maximum length of the returned string.
+
+    Returns:
+        The first sentence or a truncated version of the text.
+    """
     # Look for common sentence endings
     for end in ['. ', '! ', '? ']:
         pos = text.find(end)
@@ -28,8 +41,18 @@ def get_first_sentence(text: str, max_len: int = 200) -> str:
         return text[:max_len].rstrip() + '...'
     return text
 
-def create_app():
-    """Creates and configures the FastMCP app instance and its tools."""
+
+def create_app() -> FastMCP:
+    """
+    Create and configure the FastMCP application instance.
+
+    This factory function creates the MCP server and registers all tools
+    for interacting with arXiv: search_papers, get_paper_data,
+    get_full_paper_text, list_categories, and update_categories.
+
+    Returns:
+        A configured FastMCP application instance ready to run.
+    """
     app = FastMCP("arxiv-server")
     arxiv_client = ArxivClient()
 

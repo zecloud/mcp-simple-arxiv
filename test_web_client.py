@@ -67,7 +67,7 @@ async def main():
             stderr=sys.stderr
         )
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:  # Increased for PDF conversion
             if not await check_server_ready(client):
                 raise RuntimeError("Could not connect to the web server.")
 
@@ -76,7 +76,7 @@ async def main():
             response_json = await call_tool(client, "tools/list") # Using call_tool to simplify logic
             tools = response_json['result']['tools']
             logging.info(f"Found {len(tools)} tools.")
-            assert len(tools) == 4
+            assert len(tools) == 5
             logging.info("✅ tools/list test PASSED")
 
             # 2. Test search_papers
@@ -97,7 +97,19 @@ async def main():
             assert "A common mass scale for satellite galaxies of the Milky Way" in result
             logging.info("✅ get_paper_data test PASSED")
 
-            # 4. Test list_categories
+            # 4. Test get_full_paper_text (this takes 30-90 seconds)
+            logging.info("\n--- Testing get_full_paper_text ---")
+            paper_id = "0808.3772"  # Same paper, relatively short
+            logging.info(f"Calling get_full_paper_text with paper_id: '{paper_id}'")
+            logging.info("(This may take 30-90 seconds as it downloads and converts the PDF...)")
+            response_json = await call_tool(client, "get_full_paper_text", {"paper_id": paper_id})
+            result = response_json['result']['structuredContent']['result']
+            # Check that we got markdown content back (should contain the title)
+            assert "common mass scale" in result.lower() or "satellite galaxies" in result.lower()
+            logging.info(f"Result length: {len(result)} characters")
+            logging.info("✅ get_full_paper_text test PASSED")
+
+            # 5. Test list_categories
             logging.info("\n--- Testing list_categories ---")
             response_json = await call_tool(client, "list_categories")
             result = response_json['result']['structuredContent']['result']
@@ -105,7 +117,7 @@ async def main():
             assert "arXiv Categories" in result
             logging.info("✅ list_categories test PASSED")
 
-            # 5. Test update_categories
+            # 6. Test update_categories
             logging.info("\n--- Testing update_categories ---")
             response_json = await call_tool(client, "update_categories")
             result = response_json['result']['structuredContent']['result']
