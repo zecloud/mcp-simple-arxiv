@@ -3,8 +3,12 @@ Web server entry point for the ArXiv MCP server.
 """
 import asyncio
 import logging
+from importlib.metadata import version
 
 from mcp_simple_arxiv.server import create_app
+
+# Get package version dynamically from pyproject.toml via importlib.metadata
+_version = version("mcp-simple-arxiv")
 
 def main():
     """Create and run the web server."""

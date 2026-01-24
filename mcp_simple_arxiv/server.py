@@ -5,15 +5,16 @@ MCP server for accessing arXiv papers.
 import sys
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stdin.reconfigure(encoding='utf-8')
-
+from importlib.metadata import version
 import asyncio
 import logging
 
 from fastmcp import FastMCP
 
-from .arxiv_client import ArxivClient
+from .arxiv_client import ArxivClient, SearchResult, SortBy, SortOrder
 from .update_taxonomy import load_taxonomy, update_taxonomy_file
 
+_version = version("mcp-simple-arxiv")
 logger = logging.getLogger(__name__)
 
 def get_first_sentence(text: str, max_len: int = 200) -> str:
@@ -53,7 +54,7 @@ def create_app() -> FastMCP:
     Returns:
         A configured FastMCP application instance ready to run.
     """
-    app = FastMCP("arxiv-server")
+    app = FastMCP("arxiv-server", version=_version)
     arxiv_client = ArxivClient()
 
     @app.tool(
@@ -63,7 +64,12 @@ def create_app() -> FastMCP:
             "openWorldHint": True
         }
     )
-    async def search_papers(query: str, max_results: int = 10) -> str:
+    async def search_papers(
+        query: str,
+        max_results: int = 10,
+        sort_by: str = "submitted_date",
+        sort_order: str = "descending"
+    ) -> str:
         """
 Search for papers on arXiv by title and abstract content.
 
@@ -78,13 +84,54 @@ Examples:
 - "machine learning"  (searches all fields)
 - ti:"neural networks" AND cat:cs.AI  (title with category)
 - au:bengio AND ti:"deep learning"  (author and title)
+
+Args:
+    query: Search query string.
+    max_results: Maximum results to return (1-100, default 10).
+    sort_by: Sort field - "submitted_date", "updated_date", or "relevance".
+    sort_order: Sort direction - "descending" or "ascending".
         """
-        max_results = min(max_results, 50)
-        papers = await arxiv_client.search(query, max_results)
+        max_results = min(max_results, 10)
+
+        # Validate sort_by
+        sort_by_mapping = {
+            "submitted_date": SortBy.SUBMITTED_DATE,
+            "updated_date": SortBy.UPDATED_DATE,
+            "relevance": SortBy.RELEVANCE,
+        }
+        if sort_by not in sort_by_mapping:
+            valid_options = ", ".join(sort_by_mapping.keys())
+            return f"Invalid sort_by value: '{sort_by}'. Valid options: {valid_options}"
+        sort_by_enum = sort_by_mapping[sort_by]
+
+        # Validate sort_order
+        sort_order_mapping = {
+            "descending": SortOrder.DESCENDING,
+            "ascending": SortOrder.ASCENDING,
+        }
+        if sort_order not in sort_order_mapping:
+            valid_options = ", ".join(sort_order_mapping.keys())
+            return f"Invalid sort_order value: '{sort_order}'. Valid options: {valid_options}"
+        sort_order_enum = sort_order_mapping[sort_order]
+
+        search_result: SearchResult = await arxiv_client.search(
+            query,
+            max_results,
+            sort_by=sort_by_enum,
+            sort_order=sort_order_enum
+        )
+
+        if search_result.total_results == 0:
+            return "No papers found matching your query."
         
+        # Header with total count
+        result = f"Found {search_result.total_results} total results"
+        if search_result.results_returned < search_result.total_results:
+            result += f", showing first {search_result.results_returned}"
+        result += ".\n\n"
+
         # Format results in a readable way
-        result = "Search Results:\n\n"
-        for i, paper in enumerate(papers, 1):
+        for i, paper in enumerate(search_result.papers, 1):
             result += f"{i}. {paper['title']}\n"
             result += f"   Authors: {', '.join(paper['authors'])}\n"
             result += f"   ID: {paper['id']}\n"

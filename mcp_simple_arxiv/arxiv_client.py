@@ -4,13 +4,38 @@ arXiv API client with rate limiting.
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
+from typing import Optional, Dict, List, Any
+
 import feedparser
 import httpx
-from typing import Optional, Dict, List, Any
 from docling.document_converter import DocumentConverter
 
 logger = logging.getLogger(__name__)
+
+
+class SortBy(str, Enum):
+    """Valid sort field options for arXiv API."""
+    SUBMITTED_DATE = "submittedDate"
+    UPDATED_DATE = "lastUpdatedDate"
+    RELEVANCE = "relevance"
+
+
+class SortOrder(str, Enum):
+    """Valid sort order options for arXiv API."""
+    DESCENDING = "descending"
+    ASCENDING = "ascending"
+
+
+@dataclass
+class SearchResult:
+    """Container for arXiv search results with metadata."""
+    papers: List[Dict[str, Any]]
+    total_results: int
+    results_returned: int
+
 
 class ArxivClient:
     """
@@ -112,7 +137,13 @@ class ArxivClient:
             "html_url": html_url  # URL to HTML version if available
         }
 
-    async def search(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+    async def search(
+        self,
+        query: str,
+        max_results: int = 10,
+        sort_by: SortBy = SortBy.SUBMITTED_DATE,
+        sort_order: SortOrder = SortOrder.DESCENDING
+    ) -> SearchResult:
         """
         Search arXiv papers.
         
@@ -123,6 +154,12 @@ class ArxivClient:
         - Combine terms with: AND, OR, ANDNOT
         - Filter by category: cat:cs.AI
         
+        Args:
+            query: Search query string.
+            max_results: Maximum results to return (1-2000), default 10.
+            sort_by: Sort field for the arXiv API.
+            sort_order: Sort direction for the arXiv API.
+
         Examples:
         - "machine learning"  (searches all fields)
         - ti:"neural networks" AND cat:cs.AI  (title with category)
@@ -136,8 +173,8 @@ class ArxivClient:
         params = {
             "search_query": query,
             "max_results": max_results,
-            "sortBy": "submittedDate",  # Default to newest papers first
-            "sortOrder": "descending",
+            "sortBy": sort_by.value,
+            "sortOrder": sort_order.value,
         }
         
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -152,12 +189,32 @@ class ArxivClient:
                     logger.error("Invalid response from arXiv API")
                     logger.debug(f"Response text: {response.text[:1000]}...")
                     raise ValueError("Invalid response from arXiv API")
-                    
+
+                # Extract total results from OpenSearch metadata
+                total_results = 0
+                if hasattr(feed, 'feed') and 'opensearch_totalresults' in feed.feed:
+                    try:
+                        total_results = int(feed.feed.opensearch_totalresults)
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            "Could not parse opensearch:totalResults from feed"
+                        )
+
                 if not feed.get('entries'):
-                    # Empty results are ok - return empty list
-                    return []
-                
-                return [self._parse_entry(entry) for entry in feed.entries]
+                    return SearchResult(
+                        papers=[],
+                        total_results=total_results,
+                        results_returned=0
+                    )
+
+                papers = [self._parse_entry(entry) for entry in feed.entries]
+                if total_results == 0:
+                    total_results = len(papers)
+                return SearchResult(
+                    papers=papers,
+                    total_results=total_results,
+                    results_returned=len(papers)
+                )
                 
             except httpx.HTTPError as e:
                 logger.error(f"HTTP error while searching: {e}")
