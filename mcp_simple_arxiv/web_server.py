@@ -4,7 +4,7 @@ Web server entry point for the MCP server using HTTP transport.
 
 import argparse
 import logging
-from mcp_simple_arxiv.server import app
+from mcp_simple_arxiv.server import create_app
 
 
 def parse_args():
