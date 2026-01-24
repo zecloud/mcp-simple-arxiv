@@ -4,7 +4,7 @@ Web server entry point for the MCP server using HTTP transport.
 
 import argparse
 import logging
-from .server import app
+from mcp_simple_arxiv.server import app
 
 
 def parse_args():
@@ -19,7 +19,8 @@ def main():
     """Run the MCP server as a web server."""
     logging.basicConfig(level=logging.INFO)
     args = parse_args()
-    app.run(transport="sse", host=args.host, port=args.port)
+    app = create_app()
+    app.run(transport="streamable-http", host=args.host, port=args.port,stateless_http=True)
 
 
 if __name__ == "__main__":
