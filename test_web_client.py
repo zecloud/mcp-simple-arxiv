@@ -318,6 +318,57 @@ async def main():
                 logging.error(f"❌ {test_name} test FAILED: {e}")
                 summary.add_result(test_name, passed=False, error_message=str(e))
 
+            # Test search_papers date filtering
+            test_name = "search_papers_date_filtering"
+            try:
+                logging.info(f"\n--- Testing {test_name} ---")
+
+                # Test with both dates
+                response_json = await call_tool(client, "search_papers", {
+                    "query": "ti:transformer",
+                    "max_results": 2,
+                    "date_from": "2024-01-01",
+                    "date_to": "2024-12-31"
+                })
+                result = response_json['result']['structuredContent']['result']
+                logging.info(f"Date range result:\n{result}")
+                assert "Found" in result and "total results" in result
+
+                # Test with only date_from
+                response_json = await call_tool(client, "search_papers", {
+                    "query": "ti:quantum",
+                    "max_results": 2,
+                    "date_from": "2024-06-01"
+                })
+                result = response_json['result']['structuredContent']['result']
+                logging.info(f"Date from only result:\n{result}")
+                assert "Found" in result and "total results" in result
+
+                # Test invalid date format
+                response_json = await call_tool(client, "search_papers", {
+                    "query": "test",
+                    "date_from": "01-01-2024"
+                })
+                result = response_json['result']['structuredContent']['result']
+                logging.info(f"Invalid date format result:\n{result}")
+                assert "Invalid date_from format" in result
+
+                # Test date_from after date_to
+                response_json = await call_tool(client, "search_papers", {
+                    "query": "test",
+                    "date_from": "2024-12-31",
+                    "date_to": "2024-01-01"
+                })
+                result = response_json['result']['structuredContent']['result']
+                logging.info(f"Invalid date range result:\n{result}")
+                assert "date_from cannot be after date_to" in result
+
+                logging.info(f"✅ {test_name} test PASSED")
+                summary.add_result(test_name, passed=True)
+            except Exception as e:
+                logging.error(f"❌ {test_name} test FAILED: {e}")
+                summary.add_result(test_name, passed=False, error_message=str(e))
+
             # 3. Test get_paper_data
             test_name = "get_paper_data"
             try:

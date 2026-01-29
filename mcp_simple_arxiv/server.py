@@ -8,6 +8,8 @@ sys.stdin.reconfigure(encoding='utf-8')
 from importlib.metadata import version
 import asyncio
 import logging
+from datetime import datetime, date
+from typing import Optional, Tuple
 
 from fastmcp import FastMCP
 
@@ -43,6 +45,67 @@ def get_first_sentence(text: str, max_len: int = 200) -> str:
     return text
 
 
+def parse_date_filter(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None
+) -> Tuple[str, Optional[str]]:
+    """
+    Parse and validate date range parameters for arXiv API.
+
+    Converts user-friendly YYYY-MM-DD dates to arXiv's required format
+    (YYYYMMDDTTTT where TTTT is 24-hour time in GMT).
+
+    Args:
+        date_from: Start date in YYYY-MM-DD format (uses 00:00 GMT).
+        date_to: End date in YYYY-MM-DD format (uses 23:59 GMT).
+
+    Returns:
+        Tuple of (filter_string, error_message).
+        If successful: (filter_string, None)
+        If error: ("", error_message)
+        If no dates provided: ("", None)
+    """
+    if not date_from and not date_to:
+        return ("", None)
+
+    # Validate and parse dates
+    arxiv_date_from = None
+    arxiv_date_to = None
+
+    if date_from:
+        try:
+            parsed = datetime.strptime(date_from, "%Y-%m-%d")
+            # arXiv format: YYYYMMDD + time (0000 for start of day)
+            arxiv_date_from = parsed.strftime("%Y%m%d") + "0000"
+        except ValueError:
+            return ("", f"Invalid date_from format: '{date_from}'. Expected YYYY-MM-DD.")
+
+    if date_to:
+        try:
+            parsed = datetime.strptime(date_to, "%Y-%m-%d")
+            # arXiv format: YYYYMMDD + time (2359 for end of day)
+            arxiv_date_to = parsed.strftime("%Y%m%d") + "2359"
+        except ValueError:
+            return ("", f"Invalid date_to format: '{date_to}'. Expected YYYY-MM-DD.")
+
+    # Set defaults for open-ended ranges
+    if arxiv_date_from and not arxiv_date_to:
+        # From date_from to today
+        arxiv_date_to = date.today().strftime("%Y%m%d") + "2359"
+    elif arxiv_date_to and not arxiv_date_from:
+        # From arXiv founding (August 1991) to date_to
+        arxiv_date_from = "199108010000"
+
+    # Validate date order
+    if arxiv_date_from and arxiv_date_to:
+        if arxiv_date_from > arxiv_date_to:
+            return ("", "date_from cannot be after date_to.")
+
+    # Build arXiv filter string
+    filter_str = f"submittedDate:[{arxiv_date_from} TO {arxiv_date_to}]"
+    return (filter_str, None)
+
+
 def create_app() -> FastMCP:
     """
     Create and configure the FastMCP application instance.
@@ -68,7 +131,9 @@ def create_app() -> FastMCP:
         query: str,
         max_results: int = 10,
         sort_by: str = "submitted_date",
-        sort_order: str = "descending"
+        sort_order: str = "descending",
+        date_from: str = None,
+        date_to: str = None
     ) -> str:
         """
 Search for papers on arXiv.
@@ -105,11 +170,19 @@ TROUBLESHOOTING - Too many irrelevant results?
 3. Use AND to combine multiple specific terms
 4. Avoid generic terms without ti: or cat: prefixes
 
+DATE FILTERING:
+Filter papers by submission date using date_from and/or date_to parameters.
+- Papers from 2024: date_from="2024-01-01", date_to="2024-12-31"
+- Recent papers (2025 onwards): date_from="2025-01-01"
+- Historical papers (before 2020): date_to="2019-12-31"
+
 Args:
     query: Search query string (use field prefixes for precision).
     max_results: Maximum results to return (1-100, default 10).
     sort_by: Sort field - "submitted_date", "updated_date", or "relevance".
     sort_order: Sort direction - "descending" or "ascending".
+    date_from: Filter papers submitted on or after this date (YYYY-MM-DD format).
+    date_to: Filter papers submitted on or before this date (YYYY-MM-DD format).
         """
         max_results = min(max_results, 10)
 
@@ -134,8 +207,19 @@ Args:
             return f"Invalid sort_order value: '{sort_order}'. Valid options: {valid_options}"
         sort_order_enum = sort_order_mapping[sort_order]
 
+        # Build date filter if provided
+        date_filter, date_error = parse_date_filter(date_from, date_to)
+        if date_error:
+            return date_error
+
+        # Combine query with date filter
+        if date_filter:
+            final_query = f"({query}) AND {date_filter}"
+        else:
+            final_query = query
+
         search_result: SearchResult = await arxiv_client.search(
-            query,
+            final_query,
             max_results,
             sort_by=sort_by_enum,
             sort_order=sort_order_enum

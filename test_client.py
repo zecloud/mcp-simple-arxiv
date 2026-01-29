@@ -154,6 +154,53 @@ async def main():
             logging.error(f"❌ {test_name} test FAILED: {e}")
             summary.add_result(test_name, passed=False, error_message=str(e))
 
+        # Test search_papers date filtering
+        test_name = "search_papers_date_filtering"
+        try:
+            logging.info(f"\n--- Testing {test_name} ---")
+
+            # Test with both dates
+            result = await client.call_tool("search_papers", {
+                "query": "ti:transformer",
+                "max_results": 2,
+                "date_from": "2024-01-01",
+                "date_to": "2024-12-31"
+            })
+            logging.info(f"Date range result:\n{result.data}")
+            assert "Found" in result.data and "total results" in result.data
+
+            # Test with only date_from
+            result = await client.call_tool("search_papers", {
+                "query": "ti:quantum",
+                "max_results": 2,
+                "date_from": "2024-06-01"
+            })
+            logging.info(f"Date from only result:\n{result.data}")
+            assert "Found" in result.data and "total results" in result.data
+
+            # Test invalid date format
+            result = await client.call_tool("search_papers", {
+                "query": "test",
+                "date_from": "01-01-2024"
+            })
+            logging.info(f"Invalid date format result:\n{result.data}")
+            assert "Invalid date_from format" in result.data
+
+            # Test date_from after date_to
+            result = await client.call_tool("search_papers", {
+                "query": "test",
+                "date_from": "2024-12-31",
+                "date_to": "2024-01-01"
+            })
+            logging.info(f"Invalid date range result:\n{result.data}")
+            assert "date_from cannot be after date_to" in result.data
+
+            logging.info(f"✅ {test_name} test PASSED")
+            summary.add_result(test_name, passed=True)
+        except Exception as e:
+            logging.error(f"❌ {test_name} test FAILED: {e}")
+            summary.add_result(test_name, passed=False, error_message=str(e))
+
         # 3. Test get_paper_data
         test_name = "get_paper_data"
         try:

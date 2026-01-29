@@ -5,7 +5,7 @@ This guide explains how to run the network-hostable version of the `mcp-simple-a
 ## Overview
 
 The web server is a stateless service that exposes five tools for interacting with the arXiv API:
-- `search_papers`: Search for papers by keyword, with sorting options and total result count.
+- `search_papers`: Search for papers by keyword, with date filtering, sorting options, and total result count.
 - `get_paper_data`: Fetch detailed information for a specific paper ID.
 - `get_full_paper_text`: Convert paper PDF to Markdown (resource-intensive, 30-90s).
 - `list_categories`: List the available arXiv subject categories.
@@ -58,6 +58,14 @@ curl -X POST http://127.0.0.1:8000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_papers","arguments":{"query": "quantum computing", "sort_by": "relevance", "sort_order": "descending"}}}'
+```
+
+**With date filtering:**
+```bash
+curl -X POST http://127.0.0.1:8000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_papers","arguments":{"query": "quantum computing", "date_from": "2024-01-01", "date_to": "2024-12-31"}}}'
 ```
 
 ## Docker Deployment

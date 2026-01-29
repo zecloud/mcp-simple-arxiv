@@ -12,6 +12,7 @@ An MCP server that provides access to arXiv papers through their API.
 
 This server allows LLM clients (like Claude Desktop) to:
 - Search for scientific papers on arXiv by title and abstract content
+- Filter search results by submission date range
 - Control search result sorting (by submission date, update date, or relevance)
 - See total matching results count to gauge search specificity
 - Get paper metadata and abstracts
@@ -84,6 +85,12 @@ Can you search arXiv for recent papers about large language models?
 The LLM can sort results by submission date, update date, or relevance:
 ```
 Search arXiv for papers about transformers, sorted by relevance.
+```
+
+Date filtering lets you focus on specific time periods:
+```
+Find papers about quantum computing published in 2024.
+Search for recent machine learning papers from the last 6 months.
 ```
 
 Search results include:
