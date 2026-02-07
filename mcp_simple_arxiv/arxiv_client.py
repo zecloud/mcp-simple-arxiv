@@ -296,17 +296,23 @@ class ArxivClient:
             # Convert PDF in a thread pool to avoid blocking
             loop = asyncio.get_running_loop()
             
-            def convert_pdf_to_markdown(pdf_bytes: bytes) -> str:
+            def convert_pdf_to_markdown(
+                pdf_bytes: bytes, 
+                title: str, 
+                authors: List[str], 
+                published: str, 
+                arxiv_id: str
+            ) -> str:
                 """Convert PDF bytes to markdown text."""
                 # Open PDF from bytes
                 pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
                 
                 # Convert to markdown
                 markdown_parts = []
-                markdown_parts.append(f"# {paper['title']}\n\n")
-                markdown_parts.append(f"**Authors:** {', '.join(paper['authors'])}\n\n")
-                markdown_parts.append(f"**Published:** {paper['published']}\n\n")
-                markdown_parts.append(f"**arXiv ID:** {paper_id}\n\n")
+                markdown_parts.append(f"# {title}\n\n")
+                markdown_parts.append(f"**Authors:** {', '.join(authors)}\n\n")
+                markdown_parts.append(f"**Published:** {published}\n\n")
+                markdown_parts.append(f"**arXiv ID:** {arxiv_id}\n\n")
                 markdown_parts.append("---\n\n")
                 
                 # Extract text from each page
@@ -326,7 +332,15 @@ class ArxivClient:
             
             # Add timeout to prevent hanging on very large or problematic PDFs    
             markdown = await asyncio.wait_for(
-                loop.run_in_executor(None, convert_pdf_to_markdown, pdf_content),
+                loop.run_in_executor(
+                    None, 
+                    convert_pdf_to_markdown, 
+                    pdf_content,
+                    paper['title'],
+                    paper['authors'],
+                    paper['published'],
+                    paper_id
+                ),
                 timeout=60.0  # 1 minute timeout (faster than docling)
             )
             return markdown
