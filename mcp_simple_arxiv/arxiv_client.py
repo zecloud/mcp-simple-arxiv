@@ -4,12 +4,38 @@ arXiv API client with rate limiting.
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-import feedparser
-import httpx
+from enum import Enum
 from typing import Optional, Dict, List, Any
 
+import feedparser
+import httpx
+from docling.document_converter import DocumentConverter
+
 logger = logging.getLogger(__name__)
+
+
+class SortBy(str, Enum):
+    """Valid sort field options for arXiv API."""
+    SUBMITTED_DATE = "submittedDate"
+    UPDATED_DATE = "lastUpdatedDate"
+    RELEVANCE = "relevance"
+
+
+class SortOrder(str, Enum):
+    """Valid sort order options for arXiv API."""
+    DESCENDING = "descending"
+    ASCENDING = "ascending"
+
+
+@dataclass
+class SearchResult:
+    """Container for arXiv search results with metadata."""
+    papers: List[Dict[str, Any]]
+    total_results: int
+    results_returned: int
+
 
 class ArxivClient:
     """
@@ -44,7 +70,7 @@ class ArxivClient:
         """
         # Remove version suffix if present (e.g., v1, v2)
         base_id = arxiv_id.split('v')[0]
-        return f"https://arxiv.org/html/{arxiv_id}"
+        return f"https://arxiv.org/html/{base_id}"
 
     def _parse_entry(self, entry: Dict[str, Any]) -> Dict[str, Any]:
         """Parse a feed entry into a paper dictionary."""
@@ -111,7 +137,13 @@ class ArxivClient:
             "html_url": html_url  # URL to HTML version if available
         }
 
-    async def search(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
+    async def search(
+        self,
+        query: str,
+        max_results: int = 10,
+        sort_by: SortBy = SortBy.SUBMITTED_DATE,
+        sort_order: SortOrder = SortOrder.DESCENDING
+    ) -> SearchResult:
         """
         Search arXiv papers.
         
@@ -122,6 +154,12 @@ class ArxivClient:
         - Combine terms with: AND, OR, ANDNOT
         - Filter by category: cat:cs.AI
         
+        Args:
+            query: Search query string.
+            max_results: Maximum results to return (1-2000), default 10.
+            sort_by: Sort field for the arXiv API.
+            sort_order: Sort direction for the arXiv API.
+
         Examples:
         - "machine learning"  (searches all fields)
         - ti:"neural networks" AND cat:cs.AI  (title with category)
@@ -135,8 +173,8 @@ class ArxivClient:
         params = {
             "search_query": query,
             "max_results": max_results,
-            "sortBy": "submittedDate",  # Default to newest papers first
-            "sortOrder": "descending",
+            "sortBy": sort_by.value,
+            "sortOrder": sort_order.value,
         }
         
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -151,12 +189,32 @@ class ArxivClient:
                     logger.error("Invalid response from arXiv API")
                     logger.debug(f"Response text: {response.text[:1000]}...")
                     raise ValueError("Invalid response from arXiv API")
-                    
+
+                # Extract total results from OpenSearch metadata
+                total_results = 0
+                if hasattr(feed, 'feed') and 'opensearch_totalresults' in feed.feed:
+                    try:
+                        total_results = int(feed.feed.opensearch_totalresults)
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            "Could not parse opensearch:totalResults from feed"
+                        )
+
                 if not feed.get('entries'):
-                    # Empty results are ok - return empty list
-                    return []
-                
-                return [self._parse_entry(entry) for entry in feed.entries]
+                    return SearchResult(
+                        papers=[],
+                        total_results=total_results,
+                        results_returned=0
+                    )
+
+                papers = [self._parse_entry(entry) for entry in feed.entries]
+                if total_results == 0:
+                    total_results = len(papers)
+                return SearchResult(
+                    papers=papers,
+                    total_results=total_results,
+                    results_returned=len(papers)
+                )
                 
             except httpx.HTTPError as e:
                 logger.error(f"HTTP error while searching: {e}")
@@ -203,3 +261,53 @@ class ArxivClient:
             except httpx.HTTPError as e:
                 logger.error(f"HTTP error while fetching paper: {e}")
                 raise ValueError(f"arXiv API HTTP error: {str(e)}")
+
+    async def get_paper_text_from_pdf(self, paper_id: str) -> str:
+        """
+        Get the full paper text as Markdown using Docling.
+        
+        Downloads and converts the paper PDF to Markdown format.
+        This operation may take 30-90 seconds depending on paper length and complexity.
+        
+        Args:
+            paper_id: arXiv paper ID (e.g., "2103.08220")
+            
+        Returns:
+            Markdown-formatted text of the paper, or an error message if conversion fails.
+            
+        Note:
+            - Complex equations and figures may not convert perfectly
+            - Very large papers may exceed typical context windows
+            - Conversion is resource-intensive (CPU and memory)
+        """
+        await self._wait_for_rate_limit()
+  
+        paper = await self.get_paper(paper_id)
+        if not paper["pdf_url"]:
+            return f"No PDF URL found for paper: {paper_id}"
+
+        # We have the PDF URL so we can proceed
+        # Run the synchronous PDF conversion in a thread pool to avoid blocking
+        try:
+            loop = asyncio.get_event_loop()
+             
+            def convert_paper():
+                converter = DocumentConverter()
+                result = converter.convert(paper["pdf_url"])
+                return result.document.export_to_markdown()
+            
+            # Add timeout to prevent hanging on very large or problematic PDFs    
+            markdown = await asyncio.wait_for(
+                loop.run_in_executor(None, convert_paper),
+                timeout=120.0  # 2 minute timeout
+            )
+            return markdown
+            
+        except asyncio.TimeoutError:
+            error_msg = f"Timeout: PDF conversion exceeded 120 seconds for paper {paper_id}"
+            logger.error(error_msg)
+            return error_msg
+            
+        except Exception as e:
+            logger.error(f"Error converting paper {paper_id} to Markdown: {e}", exc_info=True)
+            return f"Error while converting paper to Markdown: {str(e)}"

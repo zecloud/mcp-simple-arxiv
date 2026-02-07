@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcp-simple-arxiv"
-version = "0.3.0"
+version = "0.6.0"
 description = "An MCP server that provides access to arXiv papers through their API."
 readme = "README.md"
 authors = [
@@ -17,10 +17,11 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "fastmcp",
+    "fastmcp[tasks]>=2.14,<3.0",
     "feedparser",  # for parsing arXiv API responses
     "httpx",      # for making HTTP requests with async support
     "beautifulsoup4",  # for parsing arXiv taxonomy page
+    "docling"           # for converting papers into MarkDown text for models
 ]
 
 [project.urls]

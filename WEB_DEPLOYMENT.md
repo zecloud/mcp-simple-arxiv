@@ -4,9 +4,10 @@ This guide explains how to run the network-hostable version of the `mcp-simple-a
 
 ## Overview
 
-The web server is a stateless service that exposes four tools for interacting with the arXiv API:
-- `search_papers`: Search for papers by keyword.
+The web server is a stateless service that exposes five tools for interacting with the arXiv API:
+- `search_papers`: Search for papers by keyword, with date filtering, sorting options, and total result count.
 - `get_paper_data`: Fetch detailed information for a specific paper ID.
+- `get_full_paper_text`: Convert paper PDF to Markdown (resource-intensive, 30-90s).
 - `list_categories`: List the available arXiv subject categories.
 - `update_categories`: Refresh the locally cached category list from arXiv.
 
@@ -37,7 +38,7 @@ You can test the running server from your command line using `curl`.
 
 **List Tools Request:**
 ```bash
-curl -X POST http://127.0.0.1:8000/mcp/ \
+curl -X POST http://127.0.0.1:8000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
@@ -45,22 +46,71 @@ curl -X POST http://127.0.0.1:8000/mcp/ \
 
 **Tool Call Request (`search_papers`):**
 ```bash
-curl -X POST http://127.0.0.1:8000/mcp/ \
+curl -X POST http://127.0.0.1:8000/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_papers","arguments":{"query": "quantum computing"}}}'
 ```
 
+**With sorting options:**
+```bash
+curl -X POST http://127.0.0.1:8000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_papers","arguments":{"query": "quantum computing", "sort_by": "relevance", "sort_order": "descending"}}}'
+```
+
+**With date filtering:**
+```bash
+curl -X POST http://127.0.0.1:8000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"search_papers","arguments":{"query": "quantum computing", "date_from": "2024-01-01", "date_to": "2024-12-31"}}}'
+```
+
 ## Docker Deployment
 
-The project includes a `Dockerfile.web` for easy containerization.
+The project includes a `Dockerfile.web` for containerization and a `docker-compose.yml` for production deployment with Redis.
 
-### 1. Build the Docker Image
+### Background Tasks
+
+The `get_full_paper_text` tool runs as a background task (30-90 seconds for PDF conversion). This means:
+- The server returns immediately with a task ID
+- Clients poll for task completion
+- With Redis: tasks survive server restarts
+- Without Redis: tasks are stored in memory (lost on restart)
+
+### Option A: Docker Compose (Recommended for Production)
+
+Docker Compose runs the server with Redis for persistent background tasks:
+
+```bash
+# Build and start both services
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+```
+
+This creates two containers:
+- `arxiv-server`: The MCP server on port 8000
+- `redis`: Redis for task persistence
+
+The `redis-data` volume persists task data across container restarts.
+
+### Option B: Standalone Docker (Simple Deployment)
+
+For simpler deployments without task persistence:
+
+#### 1. Build the Docker Image
 ```bash
 docker build -f Dockerfile.web -t mcp-simple-arxiv:web .
 ```
 
-### 2. Run the Docker Container
+#### 2. Run the Docker Container
 
 To run the container for use with a local reverse proxy (like Apache or Nginx), you should map the container’s port only to the host’s loopback interface:
 ```bash
