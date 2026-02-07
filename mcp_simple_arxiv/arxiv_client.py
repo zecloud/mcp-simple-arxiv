@@ -10,6 +10,7 @@ from enum import Enum
 from typing import Optional, Dict, List, Any
 
 import feedparser
+import fitz  # PyMuPDF
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -284,20 +285,21 @@ class ArxivClient:
         if not paper["pdf_url"]:
             return f"No PDF URL found for paper: {paper_id}"
 
-        # Download and convert PDF in a thread pool to avoid blocking
+        # Download and convert PDF
         try:
-            import io
-            import fitz  # PyMuPDF
+            # Download PDF asynchronously first
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.get(paper["pdf_url"], follow_redirects=True)
+                response.raise_for_status()
+                pdf_content = response.content
             
+            # Convert PDF in a thread pool to avoid blocking
             loop = asyncio.get_running_loop()
             
-            def convert_paper():
-                # Download PDF
-                response = httpx.get(paper["pdf_url"], timeout=30.0, follow_redirects=True)
-                response.raise_for_status()
-                
+            def convert_pdf_to_markdown(pdf_bytes: bytes) -> str:
+                """Convert PDF bytes to markdown text."""
                 # Open PDF from bytes
-                pdf_doc = fitz.open(stream=response.content, filetype="pdf")
+                pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
                 
                 # Convert to markdown
                 markdown_parts = []
@@ -324,7 +326,7 @@ class ArxivClient:
             
             # Add timeout to prevent hanging on very large or problematic PDFs    
             markdown = await asyncio.wait_for(
-                loop.run_in_executor(None, convert_paper),
+                loop.run_in_executor(None, convert_pdf_to_markdown, pdf_content),
                 timeout=60.0  # 1 minute timeout (faster than docling)
             )
             return markdown
