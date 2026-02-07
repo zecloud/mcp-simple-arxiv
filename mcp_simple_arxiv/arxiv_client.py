@@ -11,7 +11,6 @@ from typing import Optional, Dict, List, Any
 
 import feedparser
 import httpx
-from docling.document_converter import DocumentConverter
 
 logger = logging.getLogger(__name__)
 
@@ -264,10 +263,10 @@ class ArxivClient:
 
     async def get_paper_text_from_pdf(self, paper_id: str) -> str:
         """
-        Get the full paper text as Markdown using Docling.
+        Get the full paper text as Markdown using PyMuPDF.
         
         Downloads and converts the paper PDF to Markdown format.
-        This operation may take 30-90 seconds depending on paper length and complexity.
+        This operation is typically fast (5-15 seconds) depending on paper length.
         
         Args:
             paper_id: arXiv paper ID (e.g., "2103.08220")
@@ -276,34 +275,62 @@ class ArxivClient:
             Markdown-formatted text of the paper, or an error message if conversion fails.
             
         Note:
-            - Complex equations and figures may not convert perfectly
+            - Complex equations may not convert perfectly to Markdown
             - Very large papers may exceed typical context windows
-            - Conversion is resource-intensive (CPU and memory)
+            - Conversion is lightweight and fast
         """
-  
+
         paper = await self.get_paper(paper_id)
         if not paper["pdf_url"]:
             return f"No PDF URL found for paper: {paper_id}"
 
-        # We have the PDF URL so we can proceed
-        # Run the synchronous PDF conversion in a thread pool to avoid blocking
+        # Download and convert PDF in a thread pool to avoid blocking
         try:
+            import io
+            import fitz  # PyMuPDF
+            
             loop = asyncio.get_running_loop()
-             
+            
             def convert_paper():
-                converter = DocumentConverter()
-                result = converter.convert(paper["pdf_url"])
-                return result.document.export_to_markdown()
+                # Download PDF
+                response = httpx.get(paper["pdf_url"], timeout=30.0, follow_redirects=True)
+                response.raise_for_status()
+                
+                # Open PDF from bytes
+                pdf_doc = fitz.open(stream=response.content, filetype="pdf")
+                
+                # Convert to markdown
+                markdown_parts = []
+                markdown_parts.append(f"# {paper['title']}\n\n")
+                markdown_parts.append(f"**Authors:** {', '.join(paper['authors'])}\n\n")
+                markdown_parts.append(f"**Published:** {paper['published']}\n\n")
+                markdown_parts.append(f"**arXiv ID:** {paper_id}\n\n")
+                markdown_parts.append("---\n\n")
+                
+                # Extract text from each page
+                for page_num in range(pdf_doc.page_count):
+                    page = pdf_doc[page_num]
+                    
+                    # Get text in markdown-like format
+                    text = page.get_text("text")
+                    
+                    # Basic cleanup
+                    text = text.strip()
+                    if text:
+                        markdown_parts.append(f"\n\n## Page {page_num + 1}\n\n{text}")
+                
+                pdf_doc.close()
+                return "".join(markdown_parts)
             
             # Add timeout to prevent hanging on very large or problematic PDFs    
             markdown = await asyncio.wait_for(
                 loop.run_in_executor(None, convert_paper),
-                timeout=120.0  # 2 minute timeout
+                timeout=60.0  # 1 minute timeout (faster than docling)
             )
             return markdown
             
         except asyncio.TimeoutError:
-            error_msg = f"Timeout: PDF conversion exceeded 120 seconds for paper {paper_id}"
+            error_msg = f"Timeout: PDF conversion exceeded 60 seconds for paper {paper_id}"
             logger.error(error_msg)
             return error_msg
             

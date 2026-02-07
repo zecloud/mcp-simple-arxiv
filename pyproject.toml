@@ -21,7 +21,7 @@ dependencies = [
     "feedparser",  # for parsing arXiv API responses
     "httpx",      # for making HTTP requests with async support
     "beautifulsoup4",  # for parsing arXiv taxonomy page
-    "docling"           # for converting papers into MarkDown text for models
+    "pymupdf>=1.23.0"  # for converting PDFs to text/markdown (lighter than docling)
 ]
 
 [project.urls]
