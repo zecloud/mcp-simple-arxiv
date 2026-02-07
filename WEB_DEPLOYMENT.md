@@ -7,7 +7,7 @@ This guide explains how to run the network-hostable version of the `mcp-simple-a
 The web server is a stateless service that exposes five tools for interacting with the arXiv API:
 - `search_papers`: Search for papers by keyword, with date filtering, sorting options, and total result count.
 - `get_paper_data`: Fetch detailed information for a specific paper ID.
-- `get_full_paper_text`: Convert paper PDF to Markdown (resource-intensive, 30-90s).
+- `get_full_paper_text`: Convert paper PDF to Markdown (lightweight, 5-15s).
 - `list_categories`: List the available arXiv subject categories.
 - `update_categories`: Refresh the locally cached category list from arXiv.
 
@@ -74,7 +74,7 @@ The project includes a `Dockerfile.web` for containerization and a `docker-compo
 
 ### Background Tasks
 
-The `get_full_paper_text` tool runs as a background task (30-90 seconds for PDF conversion). This means:
+The `get_full_paper_text` tool runs as a background task (5-15 seconds for PDF conversion). This means:
 - The server returns immediately with a task ID
 - Clients poll for task completion
 - With Redis: tasks survive server restarts

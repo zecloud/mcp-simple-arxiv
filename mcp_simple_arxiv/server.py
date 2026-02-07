@@ -316,12 +316,12 @@ Args:
     async def get_full_paper_text(paper_id: str) -> str:
         """Get the full paper text as Markdown
         
-        Downloads and converts the paper PDF to Markdown format using Docling.
-        This operation takes 30-90 seconds depending on paper length.
+        Downloads and converts the paper PDF to Markdown format using PyMuPDF.
+        This operation typically takes 5-15 seconds depending on paper length.
         
         Important considerations:
         - Papers can be very large (even 10k-50k+ tokens) and may overwhelm your context window
-        - Complex equations and figures will most likely not convert correctly to Markdown
+        - Complex equations may not convert perfectly to Markdown
         - Use get_paper_data first to review abstract before fetching full text
         """
         paper = await arxiv_client.get_paper_text_from_pdf(paper_id)
