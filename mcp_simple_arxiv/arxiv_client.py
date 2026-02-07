@@ -304,32 +304,30 @@ class ArxivClient:
                 arxiv_id: str
             ) -> str:
                 """Convert PDF bytes to markdown text."""
-                # Open PDF from bytes
-                pdf_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-                
-                # Convert to markdown
-                markdown_parts = []
-                markdown_parts.append(f"# {title}\n\n")
-                markdown_parts.append(f"**Authors:** {', '.join(authors)}\n\n")
-                markdown_parts.append(f"**Published:** {published}\n\n")
-                markdown_parts.append(f"**arXiv ID:** {arxiv_id}\n\n")
-                markdown_parts.append("---\n\n")
-                
-                # Extract text from each page
-                for page_num in range(pdf_doc.page_count):
-                    page = pdf_doc[page_num]
+                # Open PDF from bytes and ensure it is always closed
+                with fitz.open(stream=pdf_bytes, filetype="pdf") as pdf_doc:
+                    # Convert to markdown
+                    markdown_parts = []
+                    markdown_parts.append(f"# {title}\n\n")
+                    markdown_parts.append(f"**Authors:** {', '.join(authors)}\n\n")
+                    markdown_parts.append(f"**Published:** {published}\n\n")
+                    markdown_parts.append(f"**arXiv ID:** {arxiv_id}\n\n")
+                    markdown_parts.append("---\n\n")
                     
-                    # Extract plain text from page
-                    text = page.get_text("text")
+                    # Extract text from each page
+                    for page_num in range(pdf_doc.page_count):
+                        page = pdf_doc[page_num]
+                        
+                        # Extract plain text from page
+                        text = page.get_text("text")
+                        
+                        # Basic cleanup
+                        text = text.strip()
+                        if text:
+                            # Add page markers to help with navigation in long papers
+                            markdown_parts.append(f"\n\n## Page {page_num + 1}\n\n{text}")
                     
-                    # Basic cleanup
-                    text = text.strip()
-                    if text:
-                        # Add page markers to help with navigation in long papers
-                        markdown_parts.append(f"\n\n## Page {page_num + 1}\n\n{text}")
-                
-                pdf_doc.close()
-                return "".join(markdown_parts)
+                    return "".join(markdown_parts)
             
             # Add timeout to prevent hanging on very large or problematic PDFs    
             markdown = await asyncio.wait_for(
