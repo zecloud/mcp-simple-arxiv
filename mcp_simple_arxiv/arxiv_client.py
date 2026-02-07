@@ -288,8 +288,8 @@ class ArxivClient:
         # Download and convert PDF
         try:
             # Download PDF asynchronously first
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(paper["pdf_url"], follow_redirects=True)
+            async with httpx.AsyncClient(timeout=30.0) as http_client:
+                response = await http_client.get(paper["pdf_url"], follow_redirects=True)
                 response.raise_for_status()
                 pdf_content = response.content
             
@@ -319,12 +319,13 @@ class ArxivClient:
                 for page_num in range(pdf_doc.page_count):
                     page = pdf_doc[page_num]
                     
-                    # Get text in markdown-like format
+                    # Extract plain text from page
                     text = page.get_text("text")
                     
                     # Basic cleanup
                     text = text.strip()
                     if text:
+                        # Add page markers to help with navigation in long papers
                         markdown_parts.append(f"\n\n## Page {page_num + 1}\n\n{text}")
                 
                 pdf_doc.close()
