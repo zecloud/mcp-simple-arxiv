@@ -216,13 +216,13 @@ async def main():
             logging.error(f"❌ {test_name} test FAILED: {e}")
             summary.add_result(test_name, passed=False, error_message=str(e))
 
-        # 4. Test get_full_paper_text (this takes 30-90 seconds)
+        # 4. Test get_full_paper_text (this takes 5-15 seconds)
         test_name = "get_full_paper_text"
         try:
             logging.info(f"\n--- Testing {test_name} ---")
             paper_id = "0808.3772"  # Same paper, relatively short
             logging.info(f"Calling get_full_paper_text with paper_id: '{paper_id}'")
-            logging.info("(This may take 30-90 seconds as it downloads and converts the PDF...)")
+            logging.info("(This may take 5-15 seconds as it downloads and converts the PDF...)")
             result = await client.call_tool("get_full_paper_text", {"paper_id": paper_id})
             # Check that we got markdown content back (should contain the title)
             assert "common mass scale" in result.data.lower() or "satellite galaxies" in result.data.lower()

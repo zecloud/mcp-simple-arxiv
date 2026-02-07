@@ -384,7 +384,7 @@ async def main():
                 logging.error(f"❌ {test_name} test FAILED: {e}")
                 summary.add_result(test_name, passed=False, error_message=str(e))
 
-            # 4. Test get_full_paper_text (background task - takes 30-90 seconds)
+            # 4. Test get_full_paper_text (background task - takes 5-15 seconds)
             test_name = "get_full_paper_text"
             try:
                 logging.info(f"\n--- Testing {test_name} ---")
