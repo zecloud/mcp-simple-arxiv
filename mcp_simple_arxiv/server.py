@@ -132,8 +132,8 @@ def create_app() -> FastMCP:
         max_results: int = 10,
         sort_by: str = "submitted_date",
         sort_order: str = "descending",
-        date_from: str = None,
-        date_to: str = None
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
     ) -> str:
         """
 Search for papers on arXiv.

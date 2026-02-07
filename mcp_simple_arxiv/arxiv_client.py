@@ -280,7 +280,6 @@ class ArxivClient:
             - Very large papers may exceed typical context windows
             - Conversion is resource-intensive (CPU and memory)
         """
-        await self._wait_for_rate_limit()
   
         paper = await self.get_paper(paper_id)
         if not paper["pdf_url"]:
@@ -289,7 +288,7 @@ class ArxivClient:
         # We have the PDF URL so we can proceed
         # Run the synchronous PDF conversion in a thread pool to avoid blocking
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
              
             def convert_paper():
                 converter = DocumentConverter()
